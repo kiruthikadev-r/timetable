@@ -18,6 +18,7 @@ import Timetables from './pages/Timetables';
 import TimetableDetail from './pages/TimetableDetail';
 import Approvals from './pages/Approvals';
 import MyTimetable from './pages/MyTimetable';
+import MyAssignments from './pages/MyAssignments';
 import Reports from './pages/Reports';
 import Notifications from './pages/Notifications';
 import Users from './pages/Users';
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/timetables/:id" element={<ProtectedRoute roles={ADMIN_HOD}><TimetableDetail /></ProtectedRoute>} />
         <Route path="/approvals" element={<ProtectedRoute roles={ADMIN_HOD}><Approvals /></ProtectedRoute>} />
         <Route path="/my-timetable" element={<ProtectedRoute roles={['faculty']}><MyTimetable /></ProtectedRoute>} />
+        <Route path="/my-assignments" element={<ProtectedRoute roles={['faculty']}><MyAssignments /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute roles={ADMIN_HOD}><Reports /></ProtectedRoute>} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/users" element={<ProtectedRoute roles={['superadmin']}><Users /></ProtectedRoute>} />

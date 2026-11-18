@@ -30,6 +30,7 @@ export const NAV = [
   { to: '/timetables', label: 'Timetables', icon: CalendarDays, roles: ['superadmin', 'hod'] },
   { to: '/approvals', label: 'Approvals', icon: ClipboardCheck, roles: ['superadmin', 'hod'] },
   { to: '/my-timetable', label: 'My Timetable', icon: CalendarDays, roles: ['faculty'] },
+  { to: '/my-assignments', label: 'My Classes & Subjects', icon: BookOpen, roles: ['faculty'] },
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['superadmin', 'hod'] },
   { to: '/notifications', label: 'Notifications', icon: Bell, roles: ['superadmin', 'hod', 'faculty'] },
   { to: '/users', label: 'User Accounts', icon: UserCog, roles: ['superadmin'] },
