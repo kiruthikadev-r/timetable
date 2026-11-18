@@ -6,6 +6,9 @@ const Classroom = require('../models/Classroom');
 const Faculty = require('../models/Faculty');
 const Subject = require('../models/Subject');
 const Class = require('../models/Class');
+const TimeSlot = require('../models/TimeSlot');
+const Settings = require('../models/Settings');
+const { DAYS } = require('../models/Faculty');
 
 const activeTimetableIds = async (filter = {}) => {
   const ids = await Timetable.find({ status: { $ne: 'archived' }, ...filter }).distinct('_id');
@@ -115,6 +118,92 @@ const timetableCompletion = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { classes: data, completionPercent: data.length ? Math.round((completed / data.length) * 100) : 0 } });
 });
 
+async function facultyFreePeriodsRows(req) {
+  const [periodSlots, settings] = await Promise.all([
+    TimeSlot.countDocuments({ type: 'period', isActive: true }),
+    Settings.findOne({ key: 'global' }),
+  ]);
+  const workingDays = (settings && settings.workingDays.length) || DAYS.length;
+  const totalCapacity = periodSlots * workingDays;
+
+  const facultyFilter = req.query.department ? { department: req.query.department } : {};
+  const facultyList = await Faculty.find(facultyFilter);
+
+  const timetableIds = await activeTimetableIds();
+  const assignedCounts = await TimetableEntry.aggregate([
+    { $match: { timetable: { $in: timetableIds }, faculty: { $in: facultyList.map((f) => f._id) } } },
+    { $group: { _id: '$faculty', periods: { $sum: 1 } } },
+  ]);
+  const assignedMap = new Map(assignedCounts.map((a) => [String(a._id), a.periods]));
+
+  return facultyList.map((f) => {
+    const assigned = assignedMap.get(String(f._id)) || 0;
+    return {
+      facultyId: f._id,
+      name: f.name,
+      code: f.facultyId,
+      totalCapacity,
+      assigned,
+      free: Math.max(totalCapacity - assigned, 0),
+    };
+  });
+}
+
+// GET /api/reports/faculty-free-periods?department=
+const facultyFreePeriods = asyncHandler(async (req, res) => {
+  const data = await facultyFreePeriodsRows(req);
+  res.json({ success: true, data });
+});
+
+// GET /api/reports/conflicts
+// Manual edits are validated at write-time, but this scans every active entry
+// as an independent sanity check so conflicts can never silently slip through
+// (e.g. from a future bulk-import or data fix that bypasses the controllers).
+const schedulingConflicts = asyncHandler(async (req, res) => {
+  const timetableIds = await activeTimetableIds();
+
+  const facultyConflicts = await TimetableEntry.aggregate([
+    { $match: { timetable: { $in: timetableIds } } },
+    { $group: { _id: { day: '$day', timeSlot: '$timeSlot', faculty: '$faculty' }, count: { $sum: 1 }, classes: { $addToSet: '$class' } } },
+    { $match: { count: { $gt: 1 } } },
+    { $lookup: { from: 'faculties', localField: '_id.faculty', foreignField: '_id', as: 'faculty' } },
+    { $lookup: { from: 'timeslots', localField: '_id.timeSlot', foreignField: '_id', as: 'timeSlot' } },
+    { $lookup: { from: 'classes', localField: 'classes', foreignField: '_id', as: 'classDocs' } },
+    { $unwind: '$faculty' },
+    { $unwind: '$timeSlot' },
+  ]);
+
+  const roomConflicts = await TimetableEntry.aggregate([
+    { $match: { timetable: { $in: timetableIds } } },
+    { $group: { _id: { day: '$day', timeSlot: '$timeSlot', classroom: '$classroom' }, count: { $sum: 1 }, classes: { $addToSet: '$class' } } },
+    { $match: { count: { $gt: 1 } } },
+    { $lookup: { from: 'classrooms', localField: '_id.classroom', foreignField: '_id', as: 'classroom' } },
+    { $lookup: { from: 'timeslots', localField: '_id.timeSlot', foreignField: '_id', as: 'timeSlot' } },
+    { $lookup: { from: 'classes', localField: 'classes', foreignField: '_id', as: 'classDocs' } },
+    { $unwind: '$classroom' },
+    { $unwind: '$timeSlot' },
+  ]);
+
+  const data = [
+    ...facultyConflicts.map((c) => ({
+      type: 'faculty',
+      day: c._id.day,
+      period: c.timeSlot.label,
+      name: c.faculty.name,
+      classes: c.classDocs.map((cd) => `${cd.programme} Sem ${cd.semester} ${cd.section}`),
+    })),
+    ...roomConflicts.map((c) => ({
+      type: 'classroom',
+      day: c._id.day,
+      period: c.timeSlot.label,
+      name: c.classroom.name,
+      classes: c.classDocs.map((cd) => `${cd.programme} Sem ${cd.semester} ${cd.section}`),
+    })),
+  ];
+
+  res.json({ success: true, data });
+});
+
 // GET /api/reports/class-schedule/:classId
 const classSchedule = asyncHandler(async (req, res) => {
   const timetable = await Timetable.findOne({ class: req.params.classId, status: { $ne: 'archived' } }).sort('-createdAt');
@@ -147,12 +236,20 @@ const REPORT_COLUMNS = {
     { header: 'Required/Week', key: 'required' },
     { header: 'Scheduled/Week', key: 'scheduled' },
   ],
+  'faculty-free-periods': [
+    { header: 'Faculty', key: 'name' },
+    { header: 'Code', key: 'code' },
+    { header: 'Total Capacity', key: 'totalCapacity' },
+    { header: 'Assigned', key: 'assigned' },
+    { header: 'Free', key: 'free' },
+  ],
 };
 
 const REPORT_LOADERS = {
   'faculty-workload': (req) => facultyWorkloadRows(req),
   'classroom-utilization': () => classroomUtilizationRows(),
   'subject-allocation': (req) => subjectAllocationRows(req),
+  'faculty-free-periods': (req) => facultyFreePeriodsRows(req),
 };
 
 // The handlers above write their own res.json; pull the same aggregation logic
@@ -223,5 +320,7 @@ module.exports = {
   unassignedSubjects,
   timetableCompletion,
   classSchedule,
+  facultyFreePeriods,
+  schedulingConflicts,
   exportReport,
 };

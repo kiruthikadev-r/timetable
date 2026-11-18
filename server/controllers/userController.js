@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const ApiError = require('../utils/ApiError');
 const User = require('../models/User');
 const { getPagination, buildSearchFilter } = require('../utils/queryHelpers');
+const logAction = require('../utils/audit');
 
 const sanitize = (u) => ({
   id: u._id,
@@ -41,6 +42,7 @@ const create = asyncHandler(async (req, res) => {
   if (exists) throw new ApiError(409, 'A user with this email already exists');
 
   const user = await User.create({ name, email, password, role, department: department || null, faculty: faculty || null });
+  await logAction(req.user, `created a ${role} account for ${user.name}`, 'User', user._id, { department: user.department });
   res.status(201).json({ success: true, data: sanitize(user) });
 });
 

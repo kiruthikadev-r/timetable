@@ -7,7 +7,7 @@ const notificationSchema = new mongoose.Schema(
     message: { type: String, required: true, trim: true },
     type: {
       type: String,
-      enum: ['timetable_published', 'timetable_modified', 'assignment_change', 'classroom_change', 'approval_request', 'timetable_rejected'],
+      enum: ['timetable_published', 'timetable_modified', 'assignment_change', 'classroom_change', 'approval_request', 'timetable_rejected', 'conflict_reported'],
       required: true,
     },
     relatedTimetable: { type: mongoose.Schema.Types.ObjectId, ref: 'Timetable', default: null },

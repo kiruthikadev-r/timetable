@@ -4,6 +4,7 @@ const Department = require('../models/Department');
 const Faculty = require('../models/Faculty');
 const Class = require('../models/Class');
 const { getPagination, buildSearchFilter } = require('../utils/queryHelpers');
+const logAction = require('../utils/audit');
 
 const withCounts = async (departments) => {
   const ids = departments.map((d) => d._id);
@@ -41,6 +42,7 @@ const create = asyncHandler(async (req, res) => {
   const { name, code, hod, description } = req.body;
   if (!name || !code) throw new ApiError(400, 'name and code are required');
   const dept = await Department.create({ name, code, hod: hod || null, description });
+  await logAction(req.user, `created department ${dept.name}`, 'Department', dept._id, { department: dept._id });
   res.status(201).json({ success: true, data: dept });
 });
 
@@ -63,6 +65,7 @@ const update = asyncHandler(async (req, res) => {
   if (isActive !== undefined) dept.isActive = isActive;
 
   await dept.save();
+  await logAction(req.user, `updated department ${dept.name}`, 'Department', dept._id, { department: dept._id });
   res.json({ success: true, data: dept });
 });
 
@@ -76,6 +79,7 @@ const remove = asyncHandler(async (req, res) => {
   }
   const dept = await Department.findByIdAndDelete(req.params.id);
   if (!dept) throw new ApiError(404, 'Department not found');
+  await logAction(req.user, `deleted department ${dept.name}`, 'Department', dept._id);
   res.json({ success: true, message: 'Department deleted' });
 });
 

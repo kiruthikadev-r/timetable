@@ -12,6 +12,8 @@ router.get('/subject-allocation', ctrl.subjectAllocation);
 router.get('/unassigned-subjects', ctrl.unassignedSubjects);
 router.get('/timetable-completion', ctrl.timetableCompletion);
 router.get('/class-schedule/:classId', ctrl.classSchedule);
+router.get('/faculty-free-periods', ctrl.facultyFreePeriods);
+router.get('/conflicts', ctrl.schedulingConflicts);
 router.get('/export', ctrl.exportReport);
 
 module.exports = router;

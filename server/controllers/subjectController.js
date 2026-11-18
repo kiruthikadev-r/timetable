@@ -3,6 +3,7 @@ const ApiError = require('../utils/ApiError');
 const Subject = require('../models/Subject');
 const Class = require('../models/Class');
 const { getPagination, buildSearchFilter } = require('../utils/queryHelpers');
+const logAction = require('../utils/audit');
 
 const list = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req);
@@ -21,6 +22,7 @@ const list = asyncHandler(async (req, res) => {
 
 const create = asyncHandler(async (req, res) => {
   const subject = await Subject.create(req.body);
+  await logAction(req.user, `created subject ${subject.name}`, 'Subject', subject._id, { department: subject.department });
   res.status(201).json({ success: true, data: subject });
 });
 
@@ -41,6 +43,7 @@ const remove = asyncHandler(async (req, res) => {
   if (inUse > 0) throw new ApiError(409, 'Cannot delete a subject assigned to one or more classes');
   const subject = await Subject.findByIdAndDelete(req.params.id);
   if (!subject) throw new ApiError(404, 'Subject not found');
+  await logAction(req.user, `deleted subject ${subject.name}`, 'Subject', subject._id, { department: subject.department });
   res.json({ success: true, message: 'Subject deleted' });
 });
 

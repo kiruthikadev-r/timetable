@@ -3,6 +3,7 @@ const ApiError = require('../utils/ApiError');
 const Classroom = require('../models/Classroom');
 const TimetableEntry = require('../models/TimetableEntry');
 const { getPagination, buildSearchFilter } = require('../utils/queryHelpers');
+const logAction = require('../utils/audit');
 
 const list = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req);
@@ -19,6 +20,7 @@ const list = asyncHandler(async (req, res) => {
 
 const create = asyncHandler(async (req, res) => {
   const room = await Classroom.create(req.body);
+  await logAction(req.user, `added classroom ${room.name}`, 'Classroom', room._id);
   res.status(201).json({ success: true, data: room });
 });
 
@@ -39,6 +41,7 @@ const remove = asyncHandler(async (req, res) => {
   if (inUse > 0) throw new ApiError(409, 'Cannot delete a classroom used in existing timetable entries');
   const room = await Classroom.findByIdAndDelete(req.params.id);
   if (!room) throw new ApiError(404, 'Classroom not found');
+  await logAction(req.user, `deleted classroom ${room.name}`, 'Classroom', room._id);
   res.json({ success: true, message: 'Classroom deleted' });
 });
 

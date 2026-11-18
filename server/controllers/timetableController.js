@@ -7,6 +7,7 @@ const TimetableEntry = require('../models/TimetableEntry');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { loadSchedulingContext, generateForClass } = require('../services/timetableGenerator');
+const logAction = require('../utils/audit');
 
 const CLASS_POPULATE = [
   { path: 'department' },
@@ -37,9 +38,21 @@ const generate = asyncHandler(async (req, res) => {
   const classes = await resolveTargetClasses({ classId, departmentId, all });
   if (!classes.length) throw new ApiError(404, 'No matching classes found to generate timetables for');
 
-  const invalid = classes.find((c) => !c.subjects || c.subjects.length === 0);
-  if (invalid) {
-    // Skip classes with no curriculum assigned yet instead of failing the whole batch.
+  // A class with an approved/published timetable already has a "live" schedule;
+  // generating a second one alongside it would leave two active timetables for
+  // the same class (confusing every list/report). Skip those and require an
+  // explicit unpublish/regenerate instead, the same rule regenerate() enforces.
+  const lockedIds = new Set(
+    (await Timetable.find({ class: { $in: classes.map((c) => c._id) }, academicYear, status: { $in: ['approved', 'published'] } }).distinct('class')).map(String)
+  );
+
+  // Archive every target class's old draft/pending timetable BEFORE the
+  // scheduling context is loaded, so this run's own stale entries are never
+  // double-counted as conflicts against the class being regenerated.
+  for (const klass of classes) {
+    if (klass.subjects.length && !lockedIds.has(String(klass._id))) {
+      await Timetable.updateMany({ class: klass._id, academicYear, status: { $nin: ['approved', 'published'] } }, { status: 'archived' });
+    }
   }
 
   const ctx = await loadSchedulingContext(academicYear);
@@ -51,7 +64,15 @@ const generate = asyncHandler(async (req, res) => {
       continue;
     }
 
-    await Timetable.updateMany({ class: klass._id, academicYear, status: { $nin: ['approved', 'published'] } }, { status: 'archived' });
+    if (lockedIds.has(String(klass._id))) {
+      report.push({
+        classId: klass._id,
+        displayName: klass.displayName,
+        status: 'skipped',
+        reason: 'This class already has an approved/published timetable. Unpublish or archive it before regenerating.',
+      });
+      continue;
+    }
 
     const { entries, unresolved } = generateForClass(klass, ctx);
 
@@ -70,6 +91,11 @@ const generate = asyncHandler(async (req, res) => {
         entries.map((e) => ({ ...e, timetable: timetable._id, class: klass._id, department: klass.department._id }))
       );
     }
+
+    await logAction(req.user, `generated timetable for ${klass.displayName}`, 'Timetable', timetable._id, {
+      department: klass.department._id,
+      details: { entriesCreated: entries.length, unresolved: unresolved.length },
+    });
 
     report.push({
       classId: klass._id,
@@ -111,6 +137,11 @@ const regenerate = asyncHandler(async (req, res) => {
   timetable.unresolved = unresolved;
   await timetable.save();
 
+  await logAction(req.user, `regenerated timetable for ${klass.displayName}`, 'Timetable', timetable._id, {
+    department: klass.department._id,
+    details: { entriesCreated: entries.length, unresolved: unresolved.length, version: timetable.version },
+  });
+
   res.json({ success: true, data: { timetableId: timetable._id, entriesCreated: entries.length, unresolved } });
 });
 
@@ -120,6 +151,7 @@ const list = asyncHandler(async (req, res) => {
   if (req.query.class) filter.class = req.query.class;
   if (req.query.status) filter.status = req.query.status;
   if (req.query.academicYear) filter.academicYear = req.query.academicYear;
+  if (req.query.semester) filter.semester = Number(req.query.semester);
 
   const rows = await Timetable.find(filter)
     .populate('class', 'programme section semester strength')
@@ -199,12 +231,17 @@ const updateEntry = asyncHandler(async (req, res) => {
   await entry.save();
   await entry.populate(ENTRY_POPULATE);
 
+  await logAction(req.user, 'edited a timetable session', 'TimetableEntry', entry._id, { department: entry.department });
+
   res.json({ success: true, data: entry });
 });
 
 const deleteEntry = asyncHandler(async (req, res) => {
   const entry = await TimetableEntry.findByIdAndDelete(req.params.entryId);
   if (!entry) throw new ApiError(404, 'Timetable entry not found');
+
+  await logAction(req.user, 'removed a timetable session', 'TimetableEntry', entry._id, { department: entry.department });
+
   res.json({ success: true, message: 'Entry deleted' });
 });
 
@@ -222,6 +259,7 @@ const submitForApproval = asyncHandler(async (req, res) => {
   await timetable.save();
 
   await notifyRole('hod', timetable.department._id, 'Timetable approval requested', `A timetable for ${timetable.department.name} is awaiting your review.`, 'approval_request', timetable._id);
+  await logAction(req.user, 'submitted timetable for approval', 'Timetable', timetable._id, { department: timetable.department._id });
   res.json({ success: true, data: timetable });
 });
 
@@ -232,6 +270,7 @@ const approve = asyncHandler(async (req, res) => {
   timetable.reviewedBy = req.user._id;
   timetable.reviewNote = req.body.note || '';
   await timetable.save();
+  await logAction(req.user, 'approved a timetable', 'Timetable', timetable._id, { department: timetable.department });
   res.json({ success: true, data: timetable });
 });
 
@@ -252,6 +291,7 @@ const reject = asyncHandler(async (req, res) => {
       relatedTimetable: timetable._id,
     });
   }
+  await logAction(req.user, 'requested changes to a timetable', 'Timetable', timetable._id, { department: timetable.department, details: { note: timetable.reviewNote } });
   res.json({ success: true, data: timetable });
 });
 
@@ -280,6 +320,8 @@ const publish = asyncHandler(async (req, res) => {
     );
   }
 
+  await logAction(req.user, `published timetable for ${timetable.class.programme} Sem ${timetable.class.semester} ${timetable.class.section}`, 'Timetable', timetable._id, { department: timetable.department });
+
   res.json({ success: true, data: timetable });
 });
 
@@ -290,12 +332,14 @@ const unpublish = asyncHandler(async (req, res) => {
   timetable.publishedBy = null;
   timetable.publishedAt = null;
   await timetable.save();
+  await logAction(req.user, 'unpublished a timetable', 'Timetable', timetable._id, { department: timetable.department });
   res.json({ success: true, data: timetable });
 });
 
 const archive = asyncHandler(async (req, res) => {
   const timetable = await Timetable.findByIdAndUpdate(req.params.id, { status: 'archived' }, { new: true });
   if (!timetable) throw new ApiError(404, 'Timetable not found');
+  await logAction(req.user, 'archived a timetable', 'Timetable', timetable._id, { department: timetable.department });
   res.json({ success: true, data: timetable });
 });
 

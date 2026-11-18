@@ -5,6 +5,7 @@ const Class = require('../models/Class');
 const TimetableEntry = require('../models/TimetableEntry');
 const User = require('../models/User');
 const { getPagination, buildSearchFilter } = require('../utils/queryHelpers');
+const logAction = require('../utils/audit');
 
 const list = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req);
@@ -21,6 +22,7 @@ const list = asyncHandler(async (req, res) => {
 
 const create = asyncHandler(async (req, res) => {
   const faculty = await Faculty.create(req.body);
+  await logAction(req.user, `added faculty ${faculty.name}`, 'Faculty', faculty._id, { department: faculty.department });
   res.status(201).json({ success: true, data: faculty });
 });
 
@@ -47,6 +49,7 @@ const getOne = asyncHandler(async (req, res) => {
 const update = asyncHandler(async (req, res) => {
   const faculty = await Faculty.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
   if (!faculty) throw new ApiError(404, 'Faculty not found');
+  await logAction(req.user, `updated faculty ${faculty.name}`, 'Faculty', faculty._id, { department: faculty.department });
   res.json({ success: true, data: faculty });
 });
 
@@ -56,6 +59,7 @@ const remove = asyncHandler(async (req, res) => {
   await User.updateMany({ faculty: req.params.id }, { $set: { faculty: null, isActive: false } });
   const faculty = await Faculty.findByIdAndDelete(req.params.id);
   if (!faculty) throw new ApiError(404, 'Faculty not found');
+  await logAction(req.user, `deleted faculty ${faculty.name}`, 'Faculty', faculty._id, { department: faculty.department });
   res.json({ success: true, message: 'Faculty deleted' });
 });
 

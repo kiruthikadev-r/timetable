@@ -43,7 +43,7 @@ const summary = asyncHandler(async (req, res) => {
     { $project: { _id: 0, department: '$department.name', total: 1, published: 1 } },
   ]);
 
-  const recentActivity = await AuditLog.find(deptFilter.department ? {} : {})
+  const recentActivity = await AuditLog.find(deptFilter)
     .sort('-createdAt')
     .limit(10)
     .populate('user', 'name role');

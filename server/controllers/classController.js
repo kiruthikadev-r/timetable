@@ -4,6 +4,7 @@ const Class = require('../models/Class');
 const Timetable = require('../models/Timetable');
 const TimetableEntry = require('../models/TimetableEntry');
 const { getPagination } = require('../utils/queryHelpers');
+const logAction = require('../utils/audit');
 
 const POPULATE = [
   { path: 'department', select: 'name code' },
@@ -31,6 +32,7 @@ const list = asyncHandler(async (req, res) => {
 const create = asyncHandler(async (req, res) => {
   const klass = await Class.create(req.body);
   await klass.populate(POPULATE);
+  await logAction(req.user, `created class ${klass.displayName}`, 'Class', klass._id, { department: klass.department._id });
   res.status(201).json({ success: true, data: klass });
 });
 
@@ -52,6 +54,7 @@ const update = asyncHandler(async (req, res) => {
   await assertEditable(req.params.id);
   const klass = await Class.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).populate(POPULATE);
   if (!klass) throw new ApiError(404, 'Class not found');
+  await logAction(req.user, `updated class ${klass.displayName}`, 'Class', klass._id, { department: klass.department._id });
   res.json({ success: true, data: klass });
 });
 
@@ -60,6 +63,7 @@ const remove = asyncHandler(async (req, res) => {
   if (inUse > 0) throw new ApiError(409, 'Cannot delete a class that has timetable entries. Archive its timetable first.');
   const klass = await Class.findByIdAndDelete(req.params.id);
   if (!klass) throw new ApiError(404, 'Class not found');
+  await logAction(req.user, `deleted class ${klass.displayName}`, 'Class', klass._id, { department: klass.department });
   res.json({ success: true, message: 'Class deleted' });
 });
 
