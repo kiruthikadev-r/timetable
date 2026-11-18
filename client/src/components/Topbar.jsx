@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bell, LogOut, ChevronDown } from 'lucide-react';
+import { Bell, LogOut, ChevronDown, KeyRound } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
+import { useAuth, handleError } from '../context/AuthContext';
 import api from '../api/axios';
+import Modal from './Modal';
+import { Field, TextInput, PrimaryButton, SecondaryButton } from './FormControls';
 
 const ROLE_LABEL = { superadmin: 'Super Admin', hod: 'HOD', faculty: 'Faculty' };
 
@@ -11,6 +14,24 @@ export default function Topbar() {
   const navigate = useNavigate();
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [passwordModal, setPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    setChangingPassword(true);
+    try {
+      await api.put('/auth/change-password', passwordForm);
+      toast.success('Password changed successfully');
+      setPasswordModal(false);
+      setPasswordForm({ currentPassword: '', newPassword: '' });
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   useEffect(() => {
     api
@@ -57,6 +78,15 @@ export default function Topbar() {
             >
               <button
                 onClick={() => {
+                  setMenuOpen(false);
+                  setPasswordModal(true);
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+              >
+                <KeyRound size={16} /> Change password
+              </button>
+              <button
+                onClick={() => {
                   logout();
                   navigate('/login');
                 }}
@@ -68,6 +98,36 @@ export default function Topbar() {
           )}
         </div>
       </div>
+
+      <Modal open={passwordModal} onClose={() => setPasswordModal(false)} title="Change Password" width="max-w-sm">
+        <form onSubmit={changePassword}>
+          <Field label="Current Password" required>
+            <TextInput
+              type="password"
+              required
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+            />
+          </Field>
+          <Field label="New Password" required hint="At least 6 characters">
+            <TextInput
+              type="password"
+              required
+              minLength={6}
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <SecondaryButton type="button" onClick={() => setPasswordModal(false)}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton type="submit" disabled={changingPassword}>
+              {changingPassword ? 'Saving...' : 'Save'}
+            </PrimaryButton>
+          </div>
+        </form>
+      </Modal>
     </header>
   );
 }

@@ -122,6 +122,7 @@ export default function Subjects() {
         <EmptyState icon={BookOpen} title="No subjects yet" message="Add subjects before assigning them to classes." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -157,6 +158,7 @@ export default function Subjects() {
               ))}
             </tbody>
           </table>
+          </div>
           <Pagination page={meta.page || page} pages={meta.pages} total={meta.total} onChange={setPage} />
         </div>
       )}

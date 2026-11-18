@@ -93,6 +93,7 @@ export default function AcademicYears() {
         <EmptyState icon={CalendarRange} title="No academic years yet" />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -120,6 +121,7 @@ export default function AcademicYears() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

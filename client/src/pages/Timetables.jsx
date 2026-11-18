@@ -15,37 +15,72 @@ export default function Timetables() {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('');
+  const [semester, setSemester] = useState('');
+  const [academicYear, setAcademicYear] = useState('');
+  const [years, setYears] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
     const params = {};
     if (status) params.status = status;
+    if (semester) params.semester = semester;
+    if (academicYear) params.academicYear = academicYear;
     if (user?.role !== 'superadmin') params.department = user?.department;
     api
       .get('/timetables', { params })
       .then((res) => setRows(res.data.data))
       .catch(handleError)
       .finally(() => setLoading(false));
-  }, [status, user]);
+  }, [status, semester, academicYear, user]);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    api.get('/academic-years').then((res) => setYears(res.data.data)).catch(() => {});
+  }, []);
 
   return (
     <div>
       <PageHeader title="Timetables" description="All generated timetables and their current status" />
 
-      <div className="mb-4 max-w-xs">
-        <Field label="Filter by status">
-          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All</option>
-            {Object.entries(STATUS_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Select>
-        </Field>
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="w-48">
+          <Field label="Academic Year">
+            <Select value={academicYear} onChange={(e) => setAcademicYear(e.target.value)}>
+              <option value="">All</option>
+              {years.map((y) => (
+                <option key={y._id} value={y._id}>
+                  {y.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <div className="w-40">
+          <Field label="Semester">
+            <Select value={semester} onChange={(e) => setSemester(e.target.value)}>
+              <option value="">All</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((s) => (
+                <option key={s} value={s}>
+                  Semester {s}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <div className="w-56">
+          <Field label="Status">
+            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All</option>
+              {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
       </div>
 
       {loading ? (
@@ -54,6 +89,7 @@ export default function Timetables() {
         <EmptyState icon={CalendarDays} title="No timetables yet" message="Generate a timetable from the Generate Timetable page." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -86,6 +122,7 @@ export default function Timetables() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

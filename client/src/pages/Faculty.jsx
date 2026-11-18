@@ -136,6 +136,7 @@ export default function Faculty() {
         <EmptyState icon={Users} title="No faculty members yet" message="Add faculty to start assigning them to subjects." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -170,6 +171,7 @@ export default function Faculty() {
               ))}
             </tbody>
           </table>
+          </div>
           <Pagination page={meta.page || page} pages={meta.pages} total={meta.total} onChange={setPage} />
         </div>
       )}

@@ -35,6 +35,7 @@ export default function Approvals() {
         <EmptyState icon={ClipboardCheck} title="Nothing to review" message="All submitted timetables have been reviewed." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -61,6 +62,7 @@ export default function Approvals() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

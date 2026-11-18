@@ -99,6 +99,7 @@ export default function Classrooms() {
         <EmptyState icon={DoorOpen} title="No classrooms yet" message="Add classrooms and labs to use in timetables." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -132,6 +133,7 @@ export default function Classrooms() {
               ))}
             </tbody>
           </table>
+          </div>
           <Pagination page={meta.page || page} pages={meta.pages} total={meta.total} onChange={setPage} />
         </div>
       )}

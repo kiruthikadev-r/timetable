@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Flag } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { handleError, useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import { GridSkeleton } from '../components/LoadingSkeleton';
+import Modal from '../components/Modal';
+import { Field, Textarea, PrimaryButton, SecondaryButton } from '../components/FormControls';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TYPE_STYLE = { Theory: 'bg-indigo-50 border-indigo-200 text-indigo-800', Practical: 'bg-orange-50 border-orange-200 text-orange-800', Lab: 'bg-orange-50 border-orange-200 text-orange-800' };
@@ -14,6 +17,24 @@ export default function MyTimetable() {
   const [entries, setEntries] = useState([]);
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportMessage, setReportMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const sendReport = async (e) => {
+    e.preventDefault();
+    setSending(true);
+    try {
+      await api.post('/notifications/report-conflict', { message: reportMessage });
+      toast.success('Reported to your HOD and the administrator');
+      setReportOpen(false);
+      setReportMessage('');
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setSending(false);
+    }
+  };
 
   useEffect(() => {
     if (!user?.faculty) {
@@ -44,7 +65,15 @@ export default function MyTimetable() {
 
   return (
     <div>
-      <PageHeader title="My Timetable" description={`Weekly teaching schedule • ${totalHours} periods this week`} />
+      <PageHeader
+        title="My Timetable"
+        description={`Weekly teaching schedule • ${totalHours} periods this week`}
+        action={
+          <SecondaryButton onClick={() => setReportOpen(true)}>
+            <Flag size={16} /> Report a Conflict
+          </SecondaryButton>
+        }
+      />
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-card">
         <table className="w-full min-w-[900px] border-collapse text-sm">
@@ -95,6 +124,22 @@ export default function MyTimetable() {
           </tbody>
         </table>
       </div>
+
+      <Modal open={reportOpen} onClose={() => setReportOpen(false)} title="Report a Scheduling Conflict">
+        <form onSubmit={sendReport}>
+          <Field label="What's wrong?" required hint="This goes to your HOD and the administrator">
+            <Textarea rows={4} required value={reportMessage} onChange={(e) => setReportMessage(e.target.value)} placeholder="e.g. I'm double-booked on Monday Period 3 with another class..." />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <SecondaryButton type="button" onClick={() => setReportOpen(false)}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton type="submit" disabled={sending}>
+              {sending ? 'Sending...' : 'Send Report'}
+            </PrimaryButton>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
